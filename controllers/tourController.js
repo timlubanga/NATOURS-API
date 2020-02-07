@@ -31,7 +31,6 @@ exports.getAllTours = (req, res) => {
     // .select(displayfields)
     .limit(limit)
     .then(tours => {
-      console.log('again hi');
       res.status(200).json({
         status: 'success',
         tours

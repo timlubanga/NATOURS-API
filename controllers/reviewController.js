@@ -1,4 +1,4 @@
-const Review = require('../models/revieModels');
+const Review = require('../models/reviewModels');
 
 exports.createReview = (req, res, next) => {
   Review.create(req.body)
@@ -14,7 +14,11 @@ exports.createReview = (req, res, next) => {
 };
 
 exports.getReviews = (req, res, next) => {
-  Review.find()
+  let tour;
+  if (req.params.tourId) {
+    tour = { tour: req.params.tourId };
+  }
+  Review.find(tour)
     .then(data => {
       res.status(200).json({
         message: 'successfully',
