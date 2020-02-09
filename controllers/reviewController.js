@@ -1,6 +1,12 @@
 const Review = require('../models/reviewModels');
 
 exports.createReview = (req, res, next) => {
+  if (req.params.tourId) {
+    req.body.tour = req.params.tourId;
+  }
+  if (req.user) {
+    req.body.user = req.user._id;
+  }
   Review.create(req.body)
     .then(data => {
       res.status(201).json({
