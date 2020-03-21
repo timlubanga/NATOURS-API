@@ -14,18 +14,30 @@ router
 router.route('/groupBydifficulty').get(tourController.groupBydifficulty);
 
 router.route('/mothlyPlan/:year').get(tourController.monthlyPlan);
+// router
+//   .route('/tours-within/:distance/center/:latlng/unit/:unit')
+//   .get(tourController.getToursWithin);
 
 router
   .route('/')
   .get(authController.protect, tourController.getAllTours)
-  .post(tourController.createTour)
+  .post(authController.protect, tourController.createTour)
   .delete(tourController.deleteAllTours);
+
+// router
+//   .route('/calculateDistanceFromPoint/location/:latlng')
+//   .get(tourController.calculateDistanceTofromPoint);
 
 router.use('/:tourId/reviews', reviewRouter);
 router
   .route('/:id')
   .get(tourController.getTour)
-  .patch(tourController.updateTour)
+  .patch(
+    authController.protect,
+    tourController.processFiles,
+    tourController.resizePhotos,
+    tourController.updateTour
+  )
   .delete(
     authController.protect,
     authController.authorize('admin', 'lead-guide'),

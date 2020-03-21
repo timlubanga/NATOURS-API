@@ -5,10 +5,37 @@ const { promisify } = require('util');
 const sendEmail = require('../utils/email');
 const crypto = require('crypto');
 
-createToken = id => {
+const createToken = id => {
   return jwt.sign({ _id: id }, process.env.JWT_SECRET, {
     expiresIn: process.env.EXPIRES_IN
   });
+};
+
+const setToken = req => {
+  let token = null;
+
+  if (
+    req.headers.authorization &&
+    req.headers.authorization.startsWith('Bearer')
+  ) {
+    token = req.headers.authorization.split(' ')[1];
+  }
+
+  return token;
+};
+const verifyToken = (req, res, next) => {
+  const token = setToken(req);
+  if (token) {
+    return promisify(jwt.verify)(token, process.env.JWT_SECRET)
+      .then(decoded => {
+        return { ...decoded, token };
+      })
+      .catch(err => {
+        return err;
+      });
+  } else {
+    return token;
+  }
 };
 exports.signup = (req, res, next) => {
   Users.create({
@@ -28,77 +55,78 @@ exports.signup = (req, res, next) => {
     .catch(err => next(err));
 };
 
-exports.login = (req, res, next) => {
+exports.login = async (req, res, next) => {
   const { email, password } = req.body;
-  //check if email and password exist
-  console.log('fuck');
-  if (!email || !password) {
-    return next(new AppError('please provide email or password', 400));
+  const verify = await verifyToken(req, res, next);
+
+  // check if the the token has expired
+  if (verify && verify.name == 'TokenExpiredError') {
+    const err = verify;
+    return next(err);
   }
 
-  //check if user exists and password is correct
-  //select deselected field explicitly by adding a plus sign
-  Users.findOne({ email: email })
-    .select('+password')
-    .then(async user => {
-      const correct = await user.comparePasswords(password, user.password);
-      if (!user || !correct) {
-        return next(new AppError('wrong password or email', 401));
-      }
-
-      const token = createToken(user._id);
-      res.status(200).json({
-        status: 'success',
-        token
-      });
-    })
-    .catch(err => {
-      next(err);
+  //checks that the token has not expired yet
+  else if (verify && verify.token) {
+    res.status(200).json({
+      message: 'You are logged in',
+      token: verify.token
     });
+  }
+  // checks if the token has not been provided
+  else if (!verify) {
+    if (!email || !password) {
+      return next(new AppError('please provide email or password', 400));
+    }
+
+    Users.findOne({ email: email })
+      .select('+password')
+      .then(async user => {
+        let correct = false;
+        if (user) {
+          correct = await user.comparePasswords(password, user.password);
+        }
+        if (!user || !correct) {
+          return next(new AppError('wrong password or email', 401));
+        }
+        const token = createToken(user._id);
+        res.status(200).json({
+          status: 'success',
+          token
+        });
+      })
+      .catch(err => {
+        return next(err);
+      });
+  }
 };
 
 exports.protect = (req, res, next) => {
-  //get the token and check if it has the correct format
-  let token;
-  if (
-    req.headers.authorization &&
-    req.headers.authorization.startsWith('Bearer')
-  ) {
-    token = req.headers.authorization.split(' ')[1];
+  const authenticated = verifyToken(req, res, next);
+  if (!authenticated) {
+    return next(new AppError('User not authenticated', 403));
   }
-  if (!token) {
-    next(new AppError('Please sign in to access the endpoint', 401));
-  }
-
-  //verify the token
-  promisify(jwt.verify)(token, process.env.JWT_SECRET)
-    .then(decoded => {
-      return decoded;
-    })
-    .then(async decoded => {
-      //check if the user still exists
-      const user = await Users.findById(decoded._id);
+  authenticated.then(async verify => {
+    //verify is the token is not expired or is provided
+    if (!verify || verify.name) {
+      return next(new AppError('Please again as the session has expired', 403));
+      // check whether is valid
+    } else if (verify && verify.token) {
+      const user = await Users.findById(verify._id);
       if (!user) {
         return next(new AppError('The user does not exist', 401));
       }
-
-      if (user.passChangeAfterTokenIssued(decoded.iat)) {
+      //check whether the token was issued before the password has been changed
+      if (user.passChangeAfterTokenIssued(verify.iat)) {
         return next(new AppError('please login again. Password changed', 401));
       } else {
         req.user = user;
         next();
       }
-    })
-    .catch(err => {
-      return next(err);
-    });
-
-  //check whether the token was issued before the password has been changed
+    }
+  });
 };
-
 exports.authorize = (...roles) => {
   return (req, res, next) => {
-    console.log(req.user.role);
     if (!roles.includes(req.user.role)) {
       return next(
         new AppError('Sorry, not allowed to access this endpoint', 403)
@@ -128,7 +156,7 @@ exports.forgotPassword = (req, res, next) => {
           subject: 'your password reset token valid for 10 min',
           message: message
         });
-        console.log(resetToken);
+
         res.status(200).json({
           message: 'success',
           info
@@ -195,4 +223,18 @@ exports.updateMyPassword = (req, res, next) => {
         next(new AppError(err));
       });
   });
+};
+
+exports.reactivateAccount = (req, res, next) => {
+  if (!req.body.email) {
+    return next(new AppError('please provide email', 404));
+  }
+
+  Users.updateOne({ email: req.body.email }, { $set: { active: true } })
+    .then(data => {
+      next();
+    })
+    .catch(err => {
+      next(err);
+    });
 };

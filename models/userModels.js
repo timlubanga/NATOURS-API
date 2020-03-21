@@ -62,6 +62,15 @@ userSchema.pre('save', async function(next) {
   this.confirmPassword = undefined;
 });
 
+userSchema.pre(/^find/, function(next) {
+  this.find({ active: { $ne: false } });
+  next();
+});
+
+// userSchema.pre('updateOne', function(next) {
+//   console.log(this);
+//   next();
+// });
 //instance method available on all userSchema docs
 //this note available as pass is deselected
 userSchema.methods.comparePasswords = async function(
