@@ -56,9 +56,9 @@ const TourSchema = mongoose.Schema(
         default: 'Point',
         enum: ['Point']
       },
+
       coordinates: [Number],
-      address: String,
-      description: String
+      address: String
     },
     locations: [
       {
@@ -95,6 +95,8 @@ const TourSchema = mongoose.Schema(
 //   next();
 //   console.log(this);
 // });
+
+TourSchema.index({ startLocation: '2dsphere' });
 TourSchema.virtual('reviews', {
   ref: 'Review',
   foreignField: 'tour',
