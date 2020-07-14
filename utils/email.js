@@ -8,7 +8,7 @@ const sendEmail = async options => {
       user: 'expertwriterz.inc@gmail.com',
       pass: 'husna1991'
     }
-  });
+  });   
 
   //define email options
   const mailOptions = {
